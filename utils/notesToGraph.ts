@@ -1,28 +1,17 @@
-import { Note } from "@/types/note";
 import { GraphData } from "@/types/graph";
-import { extractLinks } from "./extractLinks";
 
-export function notesToGraph(notes: Note[]): GraphData {
-    const nodes = notes.map(note => ({
+export function notesToGraph(notes: any[]): GraphData {
+    const nodes = notes.map((note) => ({
         id: note.id,
-        title: note.title
+        title: note.title,
     }));
 
-    const links = [];
-
-    for (const note of notes) {
-        const references = extractLinks(note.content);
-
-        for (const ref of references) {
-            const target = notes.find(n => n.title === ref);
-            if (target) {
-                links.push({
-                    source: note.id,
-                    target: target.id
-                });
-            }
-        }
-    }
+    const links = notes.flatMap((note) =>
+        note.references.map((ref: any) => ({
+            source: ref.fromId,
+            target: ref.toId,
+        }))
+    );
 
     return { nodes, links };
 }

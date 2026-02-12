@@ -1,12 +1,9 @@
 
 
-export default async function NoteContent({ params }: {
-  params: Promise<{ id: string }>
-}) {
-  const { id } = await params
+export default async function HomePage() {
   return (
-    <div>
-      {id}
+    <div className="flex h-screen">
+      HomePage
     </div>
-  )
+  );
 }

@@ -1,0 +1,34 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  title     String   @unique
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  parentId String?
+  parent   Note?   @relation("Hierarchy", fields: [parentId], references: [id])
+  children Note[]  @relation("Hierarchy")
+
+  references   Reference[] @relation("fromReferences")
+  referencedBy Reference[] @relation("toReferences")
+}
+
+model Reference {
+  id     String @id @default(cuid())
+  fromId String
+  toId   String
+
+  from Note @relation("fromReferences", fields: [fromId], references: [id])
+  to   Note @relation("toReferences", fields: [toId], references: [id])
+
+  @@unique([fromId, toId])
+}

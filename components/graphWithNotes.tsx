@@ -3,8 +3,6 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-
-import { notes } from "@/database/notes";
 import { notesToGraph } from "@/utils/notesToGraph";
 import NotesPanel from "@/components/notesPainel";
 
@@ -13,10 +11,10 @@ const ForceGraph3D = dynamic(
     { ssr: false }
 );
 
-const graphData = notesToGraph(notes);
-
-export default function GraphWithNotes() {
+export default function Graph3D({ notes }: { notes: any[] }) {
     const router = useRouter();
+
+    const graphData = notesToGraph(notes);
 
     const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -44,11 +42,13 @@ export default function GraphWithNotes() {
             <NotesPanel
                 open={drawerOpen}
                 noteId={selectedNoteId}
+                notes={notes}
                 onClose={() => {
                     setDrawerOpen(false);
                     setSelectedNoteId(null);
                 }}
             />
+
         </div>
     );
 }

@@ -1,12 +1,19 @@
 import { NotesSidebar } from "@/components/notesSidebar";
-import { notes } from "@/database/notes";
+import { prisma } from "@/lib/prisma";
 import { buildNotesTree } from "@/utils/buildNodesTree";
 
-export default function NoteLayout({
+export default async function NoteLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
+
+    const notes = await prisma.note.findMany({
+        include: {
+            references: true,
+            referencedBy: true,
+        },
+    });
     const tree = buildNotesTree(notes);
 
     return (

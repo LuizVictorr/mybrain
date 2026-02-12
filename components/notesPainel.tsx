@@ -9,15 +9,20 @@ import {
     DrawerTitle,
 } from "@/components/ui/drawer";
 import { useRouter } from "next/navigation";
-import { notes } from "@/database/notes";
 
 interface Props {
     open: boolean;
     noteId: string | null;
+    notes: any[];
     onClose: () => void;
 }
 
-export default function NotesPanel({ open, noteId, onClose }: Props) {
+export default function NotesPanel({
+    open,
+    noteId,
+    notes,
+    onClose,
+}: Props) {
     const router = useRouter();
 
     const note = notes.find((n) => n.id === noteId);
@@ -30,7 +35,7 @@ export default function NotesPanel({ open, noteId, onClose }: Props) {
                 if (!isOpen) onClose();
             }}
         >
-            <DrawerContent className="h-full w-40 max-w-full">
+            <DrawerContent className="h-full w-96 max-w-full flex flex-col">
                 {note ? (
                     <>
                         <DrawerHeader>
@@ -39,14 +44,12 @@ export default function NotesPanel({ open, noteId, onClose }: Props) {
                             </DrawerTitle>
                         </DrawerHeader>
 
-                        {/* Conteúdo scrollável */}
-                        <div className="no-scrollbar flex-1 overflow-y-auto px-4 pb-4">
+                        <div className="flex-1 overflow-y-auto px-4 pb-4">
                             <div className="whitespace-pre-wrap text-sm leading-relaxed">
                                 {note.content}
                             </div>
                         </div>
 
-                        {/* Footer */}
                         <div className="border-t p-4 flex justify-between gap-2">
                             <DrawerClose asChild>
                                 <Button variant="outline">Fechar</Button>

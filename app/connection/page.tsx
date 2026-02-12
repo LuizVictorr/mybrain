@@ -1,9 +1,13 @@
-import GraphWithNotes from "@/components/graphWithNotes";
+import Graph3D from "@/components/graphWithNotes";
+import { prisma } from "@/lib/prisma";
 
-export default function ConnectionPage() {
-    return (
-        <main className="w-screen h-screen">
-            <GraphWithNotes />
-        </main>
-    );
+export default async function GraphPage() {
+    const notes = await prisma.note.findMany({
+        include: {
+            references: true,
+            referencedBy: true,
+        },
+    });
+
+    return <Graph3D notes={notes} />;
 }
