@@ -15,7 +15,7 @@ model Note {
   updatedAt DateTime @updatedAt
 
   parentId String?
-  parent   Note?   @relation("Hierarchy", fields: [parentId], references: [id])
+  parent   Note?   @relation("Hierarchy", fields: [parentId], references: [id], onDelete: Cascade)
   children Note[]  @relation("Hierarchy")
 
   references   Reference[] @relation("fromReferences")
@@ -27,8 +27,8 @@ model Reference {
   fromId String
   toId   String
 
-  from Note @relation("fromReferences", fields: [fromId], references: [id])
-  to   Note @relation("toReferences", fields: [toId], references: [id])
+  from Note @relation("fromReferences", fields: [fromId], references: [id], onDelete: Cascade)
+  to   Note @relation("toReferences", fields: [toId], references: [id], onDelete: Cascade)
 
   @@unique([fromId, toId])
 }

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import DeleteButton from "./deleteButton";
+import RichTextEditor from "./richTextEditor";
 
 interface NoteEditorProps {
     note: {
@@ -17,57 +18,58 @@ export default function NoteEditor({ note }: NoteEditorProps) {
 
     const [title, setTitle] = useState(note.title);
     const [content, setContent] = useState(note.content ?? "");
-    const [loading, setLoading] = useState(false);
+    const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
 
-    async function handleSave() {
-        try {
-            setLoading(true);
-
-            const res = await fetch(`/api/notes/${note.id}`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    title,
-                    content,
-                }),
-            });
-
-            if (!res.ok) throw new Error("Erro ao atualizar");
-
-            router.refresh();
-        } catch (error) {
-            console.error(error);
-            alert("Erro ao salvar");
-        } finally {
-            setLoading(false);
+    useEffect(() => {
+        if (title === note.title && content === (note.content ?? "")) {
+            return;
         }
-    }
+
+        setStatus("saving");
+
+        const timeout = setTimeout(async () => {
+            try {
+                await fetch(`/api/notes/${note.id}`, {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        title,
+                        content,
+                    }),
+                });
+
+                setStatus("saved");
+            } catch (error) {
+                console.error(error);
+                setStatus("idle");
+            }
+        }, 800); // tempo de debounce
+
+        return () => clearTimeout(timeout);
+    }, [title, content]);
 
     return (
         <div className="p-6 max-w-3xl mx-auto">
             <input
-                className="text-3xl font-bold outline-none w-full mb-6"
+                className="text-3xl font-bold outline-none w-full mb-2"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
             />
 
-            <textarea
-                className="w-full min-h-[300px] outline-none resize-none text-sm leading-relaxed"
+            <p className="text-sm text-gray-500 mb-4">
+                {status === "saving" && "Salvando..."}
+                {status === "saved" && "Salvo ✓"}
+            </p>
+
+            <RichTextEditor
                 value={content}
-                onChange={(e) => setContent(e.target.value)}
+                onChange={setContent}
             />
 
-            <button
-                onClick={handleSave}
-                disabled={loading}
-                className="mt-4 px-4 py-2 bg-black text-white rounded"
-            >
-                {loading ? "Salvando..." : "Salvar"}
-            </button>
-            <DeleteButton id={note.id} />
 
+            <DeleteButton id={note.id} />
         </div>
     );
 }
