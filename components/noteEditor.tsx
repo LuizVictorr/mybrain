@@ -1,75 +1,70 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import DeleteButton from "./deleteButton";
-import RichTextEditor from "./richTextEditor";
+import { useState } from "react";
+import BlockEditor, { Block } from "./blockEditor";
 
 interface NoteEditorProps {
     note: {
         id: string;
         title: string;
-        content: string | null;
+        blocks: Block[] | null;
     };
 }
 
 export default function NoteEditor({ note }: NoteEditorProps) {
-    const router = useRouter();
 
     const [title, setTitle] = useState(note.title);
-    const [content, setContent] = useState(note.content ?? "");
-    const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
+    const [blocks, setBlocks] = useState<Block[]>(
+        note.blocks?.length
+            ? note.blocks
+            : [
+                {
+                    id: crypto.randomUUID(),
+                    type: "paragraph",
+                    content: "",
+                },
+            ]
+    );
 
-    useEffect(() => {
-        if (title === note.title && content === (note.content ?? "")) {
-            return;
-        }
+    async function handleChange(updatedBlocks: Block[]) {
+        setBlocks(updatedBlocks);
 
-        setStatus("saving");
+        await fetch(`/api/notes/${note.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                title,
+                blocks: updatedBlocks, // ✅ agora é blocks
+            }),
+        });
+    }
 
-        const timeout = setTimeout(async () => {
-            try {
-                await fetch(`/api/notes/${note.id}`, {
-                    method: "PUT",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        title,
-                        content,
-                    }),
-                });
+    async function handleTitleChange(newTitle: string) {
+        setTitle(newTitle);
 
-                setStatus("saved");
-            } catch (error) {
-                console.error(error);
-                setStatus("idle");
-            }
-        }, 800); // tempo de debounce
-
-        return () => clearTimeout(timeout);
-    }, [title, content]);
+        await fetch(`/api/notes/${note.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                title: newTitle,
+                blocks, // ✅ salvar blocks também
+            }),
+        });
+    }
 
     return (
-        <div className="p-6 max-w-3xl mx-auto">
+        <div className="p-6">
             <input
-                className="text-3xl font-bold outline-none w-full mb-2"
+                className="text-3xl font-bold outline-none mb-6 w-full"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => handleTitleChange(e.target.value)}
+                placeholder="Título..."
             />
 
-            <p className="text-sm text-gray-500 mb-4">
-                {status === "saving" && "Salvando..."}
-                {status === "saved" && "Salvo ✓"}
-            </p>
-
-            <RichTextEditor
-                value={content}
-                onChange={setContent}
+            <BlockEditor
+                initialBlocks={blocks}
+                onChange={handleChange}
             />
-
-
-            <DeleteButton id={note.id} />
         </div>
     );
 }

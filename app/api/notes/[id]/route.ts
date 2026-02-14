@@ -2,47 +2,56 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { extractLinks } from "@/utils/extractLinks";
 
+function extractReferencesFromBlocks(blocks: { content: string }[] = []) {
+    const regex = /\[\[([^\]]+)\]\]/g;
+    const refs = new Set<string>();
+
+    for (const block of blocks) {
+        let match;
+        while ((match = regex.exec(block.content)) !== null) {
+            refs.add(match[1].trim());
+        }
+    }
+
+    return Array.from(refs);
+}
+
 export async function PUT(
     req: Request,
-    context: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ id: string }> }
 ) {
-    const { id } = await context.params;
-    const { title, content } = await req.json();
+    const { id } = await params;
+    if (!id) return NextResponse.json({ error: "ID não fornecido" }, { status: 400 });
+
+    const { title, blocks } = await req.json();
+
+    if (!blocks || !Array.isArray(blocks))
+        return NextResponse.json({ error: "Blocks inválidos" }, { status: 400 });
 
     try {
         const updatedNote = await prisma.$transaction(async (tx) => {
             // 1️⃣ Atualiza a nota
             const note = await tx.note.update({
                 where: { id },
-                data: { title, content },
+                data: { title, blocks },
             });
 
-            // 2️⃣ Remove referências antigas dessa nota
-            await tx.reference.deleteMany({
-                where: {
-                    fromId: id,
-                },
-            });
+            // 2️⃣ Remove referências antigas
+            await tx.reference.deleteMany({ where: { fromId: id } });
 
-            // 3️⃣ Extrai novos links
-            const links = extractLinks(content);
+            // 3️⃣ Extrai referências de todos os blocos
+            const refs = extractReferencesFromBlocks(blocks);
 
-            // 4️⃣ Cria novas relações
-            for (const toTitle of links) {
+            // 4️⃣ Cria novas referências
+            for (const toTitle of refs) {
                 const targetNote = await tx.note.upsert({
                     where: { title: toTitle },
                     update: {},
-                    create: {
-                        title: toTitle,
-                        content: "",
-                    },
+                    create: { title: toTitle, blocks: [] },
                 });
 
                 await tx.reference.create({
-                    data: {
-                        fromId: id,
-                        toId: targetNote.id,
-                    },
+                    data: { fromId: id, toId: targetNote.id },
                 });
             }
 
@@ -51,13 +60,11 @@ export async function PUT(
 
         return NextResponse.json(updatedNote);
     } catch (error) {
-        console.error(error);
-        return NextResponse.json(
-            { error: "Erro ao atualizar nota" },
-            { status: 500 }
-        );
+        console.error("Erro no PUT /api/notes/[id]:", error);
+        return NextResponse.json({ error: "Erro ao atualizar nota" }, { status: 500 });
     }
 }
+
 
 export async function DELETE(
     req: Request,
