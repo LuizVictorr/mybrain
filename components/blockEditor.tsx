@@ -1,13 +1,17 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, ElementType } from "react";
 import Toolbar from "./toolbar";
+import Image from "next/image";
 
 export interface Block {
     id: string;
-    type: "paragraph" | "h1" | "h2" | "h3";
-    content: string;
+    type: "paragraph" | "h1" | "h2" | "h3" | "ul" | "ol";
+    content: string; // para listas, content será innerHTML das <li>
+    sizeClass?: string; // para controlar tamanho do texto
 }
+
+
 
 
 interface BlockEditorProps {
@@ -20,8 +24,9 @@ export default function BlockEditor({
     onChange,
 }: BlockEditorProps) {
 
-    const blockRefs = useRef<Record<string, HTMLDivElement | null>>({});
+    const blockRefs = useRef<Record<string, HTMLElement | null>>({});
     const activeBlockId = useRef<string | null>(null);
+    const savedRange = useRef<Range | null>(null);
 
     // 🔥 Sincroniza HTML sem quebrar cursor
     useEffect(() => {
@@ -30,9 +35,23 @@ export default function BlockEditor({
 
             if (el && el.innerHTML !== block.content) {
                 el.innerHTML = block.content;
+
+                const images = el.querySelectorAll("img");
+                images.forEach((img) => {
+                    enableImageResize(img as HTMLImageElement, block.id);
+                });
             }
         });
     }, [initialBlocks]);
+
+
+    function changeBlockType(id: string, type: Block['type']) {
+        const updated = initialBlocks.map((block) =>
+            block.id === id ? { ...block, type } : block
+        );
+        onChange(updated);
+    }
+
 
     function updateBlock(id: string, content: string) {
         const updated = initialBlocks.map((block) =>
@@ -42,7 +61,6 @@ export default function BlockEditor({
         onChange(updated);
     }
 
-    // 🔥 FORMATAÇÃO SEM execCommand
     function applyFormat(tag: keyof HTMLElementTagNameMap) {
         const selection = window.getSelection();
         if (!selection || selection.rangeCount === 0) return;
@@ -90,11 +108,11 @@ export default function BlockEditor({
         }
     }
 
-
-    function addBlock(afterId: string) {
+    function addBlock(afterId: string, type?: Block['type']) {
+        const currentBlock = initialBlocks.find(b => b.id === afterId);
         const newBlock: Block = {
             id: crypto.randomUUID(),
-            type: "paragraph",
+            type: type || currentBlock?.type || "paragraph",
             content: "",
         };
 
@@ -108,6 +126,7 @@ export default function BlockEditor({
             blockRefs.current[newBlock.id]?.focus();
         }, 0);
     }
+
 
     function removeBlock(id: string) {
         if (initialBlocks.length === 1) return;
@@ -126,7 +145,7 @@ export default function BlockEditor({
     }
 
     function handleKeyDown(
-        e: React.KeyboardEvent<HTMLDivElement>,
+        e: React.KeyboardEvent<HTMLElement>,
         block: Block
     ) {
         if (e.key === "Enter") {
@@ -140,7 +159,6 @@ export default function BlockEditor({
         }
     }
 
-    //Aplica cor no texto
     function applyColor(color: string) {
         const selection = window.getSelection();
         if (!selection || selection.rangeCount === 0) return;
@@ -324,7 +342,6 @@ export default function BlockEditor({
         return temp.innerHTML;
     }
 
-
     function removeColor() {
         if (!activeBlockId.current) return;
 
@@ -337,8 +354,6 @@ export default function BlockEditor({
 
         updateBlock(activeBlockId.current, cleanedHTML);
     }
-
-
 
     function cleanHighlightFromHTML(html: string) {
         const temp = document.createElement("div");
@@ -363,7 +378,6 @@ export default function BlockEditor({
         return temp.innerHTML;
     }
 
-
     function removeHighlight() {
         if (!activeBlockId.current) return;
 
@@ -377,6 +391,221 @@ export default function BlockEditor({
         updateBlock(activeBlockId.current, cleanedHTML);
     }
 
+    function enableImageResize(img: HTMLImageElement, blockId: string) {
+        // Se já estiver dentro de wrapper, não recria
+        if (img.parentElement?.classList.contains("image-wrapper")) return;
+
+        // 🔥 Cria wrapper
+        const wrapper = document.createElement("div");
+        wrapper.className = "image-wrapper";
+        wrapper.style.position = "relative";
+        wrapper.style.display = "inline-block";
+
+        img.parentNode?.insertBefore(wrapper, img);
+        wrapper.appendChild(img);
+
+        // 🔥 Cria handle
+        const handle = document.createElement("div");
+        handle.className = "image-resize-handle";
+        handle.style.width = "10px";
+        handle.style.height = "10px";
+        handle.style.background = "black";
+        handle.style.position = "absolute";
+        handle.style.right = "-15px";
+        handle.style.bottom = "-6px";
+        handle.style.cursor = "se-resize";
+        handle.style.borderRadius = "2px";
+        handle.style.opacity = "0.8";
+
+
+        wrapper.appendChild(handle);
+
+        let startX = 0;
+        let startWidth = 0;
+
+        handle.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            startX = e.clientX;
+            startWidth = img.offsetWidth;
+
+            function onMouseMove(ev: MouseEvent) {
+                const diff = ev.clientX - startX;
+                const newWidth = Math.max(100, startWidth + diff);
+                img.style.width = `${newWidth}px`;
+            }
+
+            function onMouseUp() {
+                document.removeEventListener("mousemove", onMouseMove);
+                document.removeEventListener("mouseup", onMouseUp);
+
+                const el = blockRefs.current[blockId];
+                if (el) {
+                    updateBlock(blockId, el.innerHTML);
+                }
+            }
+
+            document.addEventListener("mousemove", onMouseMove);
+            document.addEventListener("mouseup", onMouseUp);
+        });
+    }
+
+    function insertImage(url: string) {
+        if (!activeBlockId.current) return;
+
+        const el = blockRefs.current[activeBlockId.current];
+        if (!el) return;
+
+        if (!savedRange.current) return;
+
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(savedRange.current);
+
+        const img = document.createElement("img");
+        img.src = url;
+        img.className = "my-4 rounded-xl max-w-full";
+        img.style.width = "300px";
+
+        savedRange.current.insertNode(img);
+
+        enableImageResize(img, activeBlockId.current);
+
+        // move cursor depois da imagem
+        savedRange.current.setStartAfter(img);
+        savedRange.current.setEndAfter(img);
+        selection?.removeAllRanges();
+        selection?.addRange(savedRange.current);
+
+        updateBlock(activeBlockId.current, el.innerHTML);
+    }
+
+    function enableVideoResize(wrapper: HTMLDivElement, blockId: string) {
+        if (wrapper.querySelector(".video-resize-handle")) return;
+
+        wrapper.style.position = "relative";
+        wrapper.style.display = "inline-block";
+
+        const handle = document.createElement("div");
+        handle.className = "video-resize-handle";
+        handle.style.width = "10px";
+        handle.style.height = "10px";
+        handle.style.background = "black";
+        handle.style.position = "absolute";
+        handle.style.right = "-15px";
+        handle.style.bottom = "-15px";
+        handle.style.cursor = "se-resize";
+        handle.style.borderRadius = "2px";
+        handle.style.opacity = "0.8";
+
+        wrapper.appendChild(handle);
+
+        let startX = 0;
+        let startWidth = 0;
+
+        handle.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            startX = e.clientX;
+            startWidth = wrapper.offsetWidth;
+
+            function onMouseMove(ev: MouseEvent) {
+                const diff = ev.clientX - startX;
+                const newWidth = Math.max(200, startWidth + diff);
+
+                const newHeight = (newWidth * 9) / 16; // 🔥 mantém 16:9
+
+                wrapper.style.width = `${newWidth}px`;
+                wrapper.style.height = `${newHeight}px`;
+            }
+
+            function onMouseUp() {
+                document.removeEventListener("mousemove", onMouseMove);
+                document.removeEventListener("mouseup", onMouseUp);
+
+                const el = blockRefs.current[blockId];
+                if (el) {
+                    updateBlock(blockId, el.innerHTML);
+                }
+            }
+
+            document.addEventListener("mousemove", onMouseMove);
+            document.addEventListener("mouseup", onMouseUp);
+        });
+    }
+
+    function getYoutubeEmbedUrl(url: string): string | null {
+        try {
+            const parsed = new URL(url);
+
+            if (parsed.hostname.includes("youtube.com")) {
+                const videoId = parsed.searchParams.get("v");
+                if (!videoId) return null;
+                return `https://www.youtube.com/embed/${videoId}`;
+            }
+
+            if (parsed.hostname.includes("youtu.be")) {
+                const videoId = parsed.pathname.replace("/", "");
+                if (!videoId) return null;
+                return `https://www.youtube.com/embed/${videoId}`;
+            }
+
+            return null;
+        } catch {
+            return null;
+        }
+    }
+
+    function insertYouTubeVideo(url: string) {
+        if (!activeBlockId.current) return;
+
+        const el = blockRefs.current[activeBlockId.current];
+        if (!el) return;
+
+        if (!savedRange.current) return;
+
+        const embedUrl = getYoutubeEmbedUrl(url);
+        if (!embedUrl) {
+            alert("Link inválido do YouTube");
+            return;
+        }
+
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(savedRange.current);
+
+        const wrapper = document.createElement("div");
+        wrapper.style.position = "relative";
+        wrapper.style.width = "533px";  // 16:9 proporcional
+        wrapper.style.height = "300px";
+        wrapper.style.margin = "16px 0";
+
+
+        const iframe = document.createElement("iframe");
+        iframe.src = embedUrl;
+        iframe.style.width = "100%";
+        iframe.style.height = "100%";
+        iframe.style.border = "none";
+        iframe.style.borderRadius = "12px";
+        iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+        iframe.allowFullscreen = true;
+
+        wrapper.appendChild(iframe);
+
+        enableVideoResize(wrapper, activeBlockId.current);
+
+        savedRange.current.insertNode(wrapper);
+
+        savedRange.current.setStartAfter(wrapper);
+        savedRange.current.setEndAfter(wrapper);
+        selection?.removeAllRanges();
+        selection?.addRange(savedRange.current);
+
+        updateBlock(activeBlockId.current, el.innerHTML);
+    }
+
     return (
         <div className="space-y-3">
 
@@ -386,30 +615,72 @@ export default function BlockEditor({
                 onRemoveColor={removeColor}
                 onHighlight={applyHighlight}
                 onRemoveHighlight={removeHighlight}
+                onChangeBlockType={changeBlockType}
+                activeBlockId={activeBlockId.current}
+                onInsertImage={insertImage}
+                insertYouTubeVideo={insertYouTubeVideo}
             />
 
-
-
             <div className="space-y-1">
-                {initialBlocks.map((block) => (
-                    <div
-                        key={block.id}
-                        ref={(el) => {
-                            blockRefs.current[block.id] = el;
-                        }}
-                        contentEditable
-                        suppressContentEditableWarning
-                        className="outline-none min-h-[24px]"
-                        onFocus={() => {
-                            activeBlockId.current = block.id;
-                        }}
-                        onInput={(e) =>
-                            updateBlock(block.id, e.currentTarget.innerHTML)
-                        }
-                        onKeyDown={(e) => handleKeyDown(e, block)}
-                    />
-                ))}
+                {initialBlocks.map((block) => {
+                    // Escolhe o elemento correto
+                    const Tag: React.ElementType =
+                        block.type === "paragraph" ? "div" :
+                            block.type === "ul" || block.type === "ol" ? block.type :
+                                block.type;
+
+                    const fontSizeClass =
+                        block.type === "paragraph" ? "text-base" :
+                            block.type === "h3" ? "text-xl" :
+                                block.type === "h2" ? "text-2xl" :
+                                    block.type === "h1" ? "text-3xl" :
+                                        "text-base";
+
+                    // Classes para listas
+                    const listClass =
+                        block.type === "ul" ? "list-inside list-disc" :
+                            block.type === "ol" ? "list-inside list-decimal" :
+                                "";
+
+                    return (
+                        <Tag
+                            key={block.id}
+                            ref={(el: HTMLElement | null) => { blockRefs.current[block.id] = el; }}
+                            contentEditable
+                            suppressContentEditableWarning
+                            className={`outline-none min-h-6 ${fontSizeClass} ${listClass}`}
+                            onFocus={() => { activeBlockId.current = block.id; }}
+                            onInput={(e: React.FormEvent<HTMLElement>) =>
+                                updateBlock(block.id, (e.target as HTMLElement).innerHTML)
+                            }
+                            onKeyDown={(e: React.KeyboardEvent<HTMLElement>) =>
+                                handleKeyDown(e, block)
+                            }
+                            onMouseUp={() => {
+                                const selection = window.getSelection();
+                                if (selection && selection.rangeCount > 0) {
+                                    savedRange.current = selection.getRangeAt(0);
+                                }
+                            }}
+                            onKeyUp={() => {
+                                const selection = window.getSelection();
+                                if (selection && selection.rangeCount > 0) {
+                                    savedRange.current = selection.getRangeAt(0);
+                                }
+                            }}
+
+
+                        >
+                            {(block.type === "ul" || block.type === "ol") && !block.content && (
+                                <li><br /></li>
+                            )}
+                        </Tag>
+
+                    );
+                })}
+
             </div>
+
         </div>
     );
 

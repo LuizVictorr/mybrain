@@ -8,6 +8,9 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
+import { Input } from "./ui/input";
+import Image from "next/image";
 
 interface ToolbarProps {
     onFormat: (tag: keyof HTMLElementTagNameMap) => void;
@@ -15,7 +18,13 @@ interface ToolbarProps {
     onRemoveColor: () => void;
     onHighlight: (color: string) => void;
     onRemoveHighlight: () => void;
+    onChangeBlockType: (id: string, type: "paragraph" | "h1" | "h2" | "h3" | "ul" | "ol") => void;
+    activeBlockId: string | null;
+    onInsertImage: (url: string) => void;
+    insertYouTubeVideo: (url: string) => void;
+
 }
+
 
 
 export default function Toolbar({
@@ -23,7 +32,11 @@ export default function Toolbar({
     onColor,
     onRemoveColor,
     onHighlight,
-    onRemoveHighlight
+    onRemoveHighlight,
+    onChangeBlockType,
+    activeBlockId,
+    onInsertImage,
+    insertYouTubeVideo,
 }: ToolbarProps) {
 
     const defaultColors = [
@@ -39,6 +52,51 @@ export default function Toolbar({
 
     const [open, setOpen] = useState(false);
     const [highlightOpen, setHighlightOpen] = useState(false);
+    const [fontSizeOpen, setFontSizeOpen] = useState(false);
+    const [videoDialogOpen, setVideoDialogOpen] = useState(false);
+    const [videoUrl, setVideoUrl] = useState("");
+
+
+    const [link, setLink] = useState("");
+
+    function handleInsert() {
+        if (!link) return;
+
+        const converted = convertDriveLink(link);
+        onInsertImage(converted);
+        setLink("");
+    }
+
+    function convertDriveLink(url: string) {
+        const match = url.match(/\/d\/(.*?)\//);
+        if (!match) return url;
+
+        const fileId = match[1];
+        return `https://lh3.googleusercontent.com/d/${fileId}`;
+    }
+
+    function getYoutubeEmbedUrl(url: string): string | null {
+        try {
+            const parsed = new URL(url);
+
+            if (parsed.hostname.includes("youtube.com")) {
+                const videoId = parsed.searchParams.get("v");
+                if (!videoId) return null;
+                return `https://www.youtube.com/embed/${videoId}`;
+            }
+
+            if (parsed.hostname.includes("youtu.be")) {
+                const videoId = parsed.pathname.replace("/", "");
+                if (!videoId) return null;
+                return `https://www.youtube.com/embed/${videoId}`;
+            }
+
+            return null;
+        } catch {
+            return null;
+        }
+    }
+
 
 
     return (
@@ -51,7 +109,33 @@ export default function Toolbar({
             <ToolbarButton label="X₂" tag="sub" onFormat={onFormat} />
             <ToolbarButton label="X²" tag="sup" onFormat={onFormat} />
 
-            {/* 🎨 COLOR POPOVER */}
+            {/* SIZE POPOVER */}
+            <Popover open={fontSizeOpen} onOpenChange={setFontSizeOpen}>
+                <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" onMouseDown={(e) => e.preventDefault()}>
+                        🔠 Tamanho
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="space-x-2 space-y-2">
+                    {['paragraph', 'h1', 'h2', 'h3', 'ul', 'ol'].map((t) => (
+                        <Button
+                            key={t}
+                            variant="ghost"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                                if (activeBlockId) {
+                                    onChangeBlockType(activeBlockId, t as "paragraph" | "h1" | "h2" | "h3" | "ul" | "ol");
+                                }
+                            }}
+                            className="px-2 py-1 border rounded hover:bg-muted transition"
+                        >
+                            {t.toUpperCase()}
+                        </Button>
+                    ))}
+                </PopoverContent>
+            </Popover>
+
+            {/* COLOR POPOVER */}
             <Popover open={open} onOpenChange={setOpen}>
                 <PopoverTrigger asChild>
                     <Button
@@ -97,7 +181,7 @@ export default function Toolbar({
                 </PopoverContent>
             </Popover>
 
-            {/* 🖍 HIGHLIGHT POPOVER */}
+            {/* HIGHLIGHT POPOVER */}
             <Popover open={highlightOpen} onOpenChange={setHighlightOpen}>
                 <PopoverTrigger asChild>
                     <Button
@@ -138,6 +222,79 @@ export default function Toolbar({
                     </Button>
                 </PopoverContent>
             </Popover>
+
+            {/* IMAGE DIALOG */}
+            <Dialog>
+                <DialogTrigger asChild>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                    >
+                        🖼️ Imagem
+                    </Button>
+                </DialogTrigger>
+
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Inserir imagem do Drive</DialogTitle>
+                    </DialogHeader>
+
+                    <Input
+                        placeholder="Cole o link do Google Drive"
+                        value={link}
+                        onChange={(e) => setLink(e.target.value)}
+                    />
+
+                    <Button onClick={handleInsert}>
+                        Inserir
+                    </Button>
+                </DialogContent>
+            </Dialog>
+
+            {/* VIDEO DIALOG */}
+            <Dialog open={videoDialogOpen} onOpenChange={setVideoDialogOpen}>
+                <DialogTrigger asChild>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                    >
+                        📽️ Video
+                    </Button>
+                </DialogTrigger>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Inserir vídeo do YouTube</DialogTitle>
+                    </DialogHeader>
+
+                    <Input
+                        placeholder="Cole o link do YouTube"
+                        value={videoUrl}
+                        onChange={(e) => setVideoUrl(e.target.value)}
+                    />
+
+                    <div className="flex justify-end gap-2 mt-4">
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setVideoDialogOpen(false);
+                                setVideoUrl("");
+                            }}
+                        >
+                            Cancelar
+                        </Button>
+
+                        <Button
+                            onClick={() => {
+                                insertYouTubeVideo(videoUrl);
+                                setVideoDialogOpen(false);
+                                setVideoUrl("");
+                            }}
+                        >
+                            Inserir
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
         </div>
     );
